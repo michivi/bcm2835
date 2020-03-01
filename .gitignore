@@ -1,0 +1,10 @@
+doc/Makefile
+config.status
+config.log
+config.h
+Makefile
+stamp-h1
+src/bcm2835.o
+src/libbcm2835.a
+src/.deps/bcm2835.Po
+src/.deps/test.Po

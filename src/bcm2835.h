@@ -1721,14 +1721,14 @@ extern "C" {
     extern void bcm2835_spi_write(uint16_t data);
 
     /*! Start AUX SPI operations.
-      Forces RPi AUX SPI pins P1-36 (MOSI), P1-38 (MISO), P1-40 (CLK) and P1-36 (CE2)
+      Forces RPi AUX SPI pins P1-38 (MOSI), P1-35 (MISO), P1-40 (CLK) and P1-36 (CE2)
       to alternate function ALT4, which enables those pins for SPI interface.
       \return 1 if successful, 0 otherwise (perhaps because you are not running as root)
     */
     extern int bcm2835_aux_spi_begin(void);
 
     /*! End AUX SPI operations.
-       SPI1 pins P1-36 (MOSI), P1-38 (MISO), P1-40 (CLK) and P1-36 (CE2)
+       SPI1 pins P1-38 (MOSI), P1-35 (MISO), P1-40 (CLK) and P1-36 (CE2)
        are returned to their default INPUT behaviour.
      */
     extern void bcm2835_aux_spi_end(void);
@@ -1745,10 +1745,9 @@ extern "C" {
      */
     extern uint16_t bcm2835_aux_spi_CalcClockDivider(uint32_t speed_hz);
 
-    /*! Transfers half-word to and from the AUX SPI slave.
+    /*! Transfers half-word to the AUX SPI slave.
       Asserts the currently selected CS pins during the transfer.
-      \param[in] data The 8 bit data byte to write to MOSI
-      \return The 8 bit byte simultaneously read from  MISO
+      \param[in] data The 16 bit data byte to write to MOSI
       \sa bcm2835_spi_transfern()
     */
     extern void bcm2835_aux_spi_write(uint16_t data);
@@ -1759,6 +1758,15 @@ extern "C" {
       \param[in] len Number of bytes in the tbuf buffer, and the number of bytes to send
     */
     extern void bcm2835_aux_spi_writenb(const char *buf, uint32_t len);
+
+    /*! Transfers one byte to and from the AUX SPI slave.
+      Clocks the 8 bit value out on MOSI, and simultaneously clocks in data from MISO. 
+      Returns the read data byte from the slave.
+      \param[in] value The 8 bit data byte to write to MOSI
+      \return The 8 bit byte simultaneously read from MISO
+      \sa bcm2835_aux_spi_transfern()
+    */
+    extern uint8_t bcm2835_aux_spi_transfer(uint8_t value);
 
     /*! Transfers any number of bytes to and from the AUX SPI slave
       using bcm2835_aux_spi_transfernb.

@@ -910,32 +910,41 @@ void bcm2835_spi_write(uint16_t data)
 #endif
 }
 
+static void bcm2835_aux_spi_reset(void)
+{
+    volatile uint32_t* cntl0 = bcm2835_spi1 + BCM2835_AUX_SPI_CNTL0/4;
+    volatile uint32_t* cntl1 = bcm2835_spi1 + BCM2835_AUX_SPI_CNTL1/4;
+
+	bcm2835_peri_write(cntl1, 0);
+	bcm2835_peri_write(cntl0, BCM2835_AUX_SPI_CNTL0_CLEARFIFO);
+}
+
 int bcm2835_aux_spi_begin(void)
 {
     volatile uint32_t* enable = bcm2835_aux + BCM2835_AUX_ENABLE/4;
-    volatile uint32_t* cntl0 = bcm2835_spi1 + BCM2835_AUX_SPI_CNTL0/4;
-    volatile uint32_t* cntl1 = bcm2835_spi1 + BCM2835_AUX_SPI_CNTL1/4;
 
     if (bcm2835_spi1 == MAP_FAILED)
       return 0; /* bcm2835_init() failed, or not root */
 
     /* Set the SPI pins to the Alt 4 function to enable SPI1 access on them */
-	bcm2835_gpio_fsel(RPI_V2_GPIO_P1_36, BCM2835_GPIO_FSEL_ALT4);	/* SPI1_CE2_N */
-	bcm2835_gpio_fsel(RPI_V2_GPIO_P1_35, BCM2835_GPIO_FSEL_ALT4);	/* SPI1_MISO */
-	bcm2835_gpio_fsel(RPI_V2_GPIO_P1_38, BCM2835_GPIO_FSEL_ALT4);	/* SPI1_MOSI */
-	bcm2835_gpio_fsel(RPI_V2_GPIO_P1_40, BCM2835_GPIO_FSEL_ALT4);	/* SPI1_SCLK */
+    bcm2835_gpio_fsel(RPI_V2_GPIO_P1_36, BCM2835_GPIO_FSEL_ALT4);	/* SPI1_CE2_N */
+    bcm2835_gpio_fsel(RPI_V2_GPIO_P1_35, BCM2835_GPIO_FSEL_ALT4);	/* SPI1_MISO */
+    bcm2835_gpio_fsel(RPI_V2_GPIO_P1_38, BCM2835_GPIO_FSEL_ALT4);	/* SPI1_MOSI */
+    bcm2835_gpio_fsel(RPI_V2_GPIO_P1_40, BCM2835_GPIO_FSEL_ALT4);	/* SPI1_SCLK */
 
-	bcm2835_aux_spi_setClockDivider(bcm2835_aux_spi_CalcClockDivider(1000000));	// Default 1MHz SPI
+    bcm2835_aux_spi_setClockDivider(bcm2835_aux_spi_CalcClockDivider(1000000));	// Default 1MHz SPI
 
-	bcm2835_peri_write(enable, BCM2835_AUX_ENABLE_SPI0);
-	bcm2835_peri_write(cntl1, 0);
-	bcm2835_peri_write(cntl0, BCM2835_AUX_SPI_CNTL0_CLEARFIFO);
+    bcm2835_peri_write(enable, BCM2835_AUX_ENABLE_SPI0|BCM2835_AUX_ENABLE_SPI1);
+
+    bcm2835_aux_spi_reset();
 
     return 1; /* OK */
 }
 
 void bcm2835_aux_spi_end(void)
 {
+    bcm2835_aux_spi_reset();
+
 	/* Set all the SPI1 pins back to input */
 	bcm2835_gpio_fsel(RPI_V2_GPIO_P1_36, BCM2835_GPIO_FSEL_INPT);	/* SPI1_CE2_N */
 	bcm2835_gpio_fsel(RPI_V2_GPIO_P1_35, BCM2835_GPIO_FSEL_INPT);	/* SPI1_MISO */
@@ -968,7 +977,7 @@ static uint32_t spi1_speed;
 
 void bcm2835_aux_spi_setClockDivider(uint16_t divider)
 {
-		spi1_speed = (uint32_t) divider;
+	spi1_speed = (uint32_t) divider;
 }
 
 void bcm2835_aux_spi_write(uint16_t data)
@@ -993,7 +1002,8 @@ void bcm2835_aux_spi_write(uint16_t data)
 	bcm2835_peri_write(io, (uint32_t) data << 16);
 }
 
-void bcm2835_aux_spi_writenb(const char *tbuf, uint32_t len) {
+void bcm2835_aux_spi_writenb(const char *tbuf, uint32_t len)
+{
     volatile uint32_t* cntl0 = bcm2835_spi1 + BCM2835_AUX_SPI_CNTL0/4;
     volatile uint32_t* cntl1 = bcm2835_spi1 + BCM2835_AUX_SPI_CNTL1/4;
     volatile uint32_t* stat = bcm2835_spi1 + BCM2835_AUX_SPI_STAT/4;
@@ -1043,6 +1053,40 @@ void bcm2835_aux_spi_writenb(const char *tbuf, uint32_t len) {
 
 		(void) bcm2835_peri_read(io);
 	}
+}
+
+/* Writes (and reads) a single byte to AUX SPI */
+uint8_t bcm2835_aux_spi_transfer(uint8_t value)
+{
+    volatile uint32_t* cntl0 = bcm2835_spi1 + BCM2835_AUX_SPI_CNTL0/4;
+    volatile uint32_t* cntl1 = bcm2835_spi1 + BCM2835_AUX_SPI_CNTL1/4;
+    volatile uint32_t* stat = bcm2835_spi1 + BCM2835_AUX_SPI_STAT/4;
+    volatile uint32_t* io = bcm2835_spi1 + BCM2835_AUX_SPI_IO/4;
+
+    uint32_t data;
+
+    uint32_t _cntl0 = (spi1_speed << BCM2835_AUX_SPI_CNTL0_SPEED_SHIFT);
+    _cntl0 |= BCM2835_AUX_SPI_CNTL0_CS2_N;
+    _cntl0 |= BCM2835_AUX_SPI_CNTL0_ENABLE;
+    _cntl0 |= BCM2835_AUX_SPI_CNTL0_MSBF_OUT;
+    _cntl0 |= BCM2835_AUX_SPI_CNTL0_CPHA_IN;
+    _cntl0 |= 8; // Shift length.
+
+    uint32_t _cntl1 = BCM2835_AUX_SPI_CNTL1_MSBF_IN;
+
+    bcm2835_peri_write(cntl1, _cntl1);
+    bcm2835_peri_write(cntl0, _cntl0);
+
+    bcm2835_peri_write(io, (uint32_t) bcm2835_correct_order(value) << 24);
+
+    while (bcm2835_peri_read(stat) & BCM2835_AUX_SPI_STAT_BUSY)
+        ;
+
+    data = bcm2835_correct_order(bcm2835_peri_read(io) & 0xff);
+
+    bcm2835_aux_spi_reset();
+
+    return data;
 }
 
 void bcm2835_aux_spi_transfernb(const char *tbuf, char *rbuf, uint32_t len) {
@@ -1138,7 +1182,8 @@ void bcm2835_aux_spi_transfernb(const char *tbuf, char *rbuf, uint32_t len) {
 	}
 }
 
-void bcm2835_aux_spi_transfern(char *buf, uint32_t len) {
+void bcm2835_aux_spi_transfern(char *buf, uint32_t len)
+{
 	bcm2835_aux_spi_transfernb(buf, buf, len);
 }
 
